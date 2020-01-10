@@ -12,12 +12,11 @@ option(TIOGA_OUTPUT_STATS "Output statistics for TIOGA holecutting (default: off
 find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
 
-# Ensure C++11 standard is enabled
+# Ensure C++14 standard is enabled (ArborX requires C++14)
 if (CMAKE_VERSION VERSION_LESS "3.1")
-  set(CMAKE_CXX_FLAGS "-g -rdynamic -std=c++0x" ${CMAKE_CXX_FLAGS})
+  set(CMAKE_CXX_FLAGS "-g -rdynamic -std=c++0x ${CMAKE_CXX_FLAGS}")
 else()
-  set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_FLAGS "-O3" ${CMAKE_CXX_FLAGS})
+  set(CMAKE_CXX_STANDARD 14)
 endif()
 
 # Set some default compilation settings for Fortran compiler
@@ -47,6 +46,11 @@ endif()
 
 if (TIOGA_OUTPUT_STATS)
   add_definitions(-DTIOGA_OUTPUT_STATS)
+endif()
+
+if (TIOGA_ENABLE_ARBORX)
+  add_definitions(-DTIOGA_USE_ARBORX)
+  find_package(ArborX REQUIRED)
 endif()
 
 # Always build libtioga
