@@ -377,10 +377,9 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
 
   Kokkos::View<int *, DeviceType> offset("offset", 0);
   Kokkos::View<int *, DeviceType> indices("indices", 0);
-  // We really don't need any buffer, but the logic in ArborX right now
-  // dictates that it has to be positive to avoid first pass
   bvh.query(queries, MyCallback{this, xsearch, donorId, donorId_helper, found_ptr},
-            indices, offset, 1 /*buffer_size*/);
+            indices, offset, ArborX::Experimental::TraversalPolicy().setPredicateSorting(false));
+
 
   for (i = 0; i < nsearch; i++) {
       if (i != xtag[i]) {
