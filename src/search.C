@@ -47,58 +47,27 @@ struct Access<ArborXBoxesWrapper, PrimitivesTag> {
 }  // namespace Traits
 }  // namespace ArborX
 
-
-template <typename Geometry>
-struct Intersects1
-{
-  using Tag = ArborX::Details::SpatialPredicateTag;
-
-  KOKKOS_INLINE_FUNCTION Intersects1() = default;
-
-  KOKKOS_INLINE_FUNCTION Intersects1(Geometry const &geometry, volatile int const * found)
-      : _geometry(geometry), _found(found)
-  {
-  }
-
-  template <typename Other>
-  KOKKOS_INLINE_FUNCTION bool operator()(Other const &other) const
-  {
-    return !*_found && ArborX::Details::intersects(_geometry, other);
-  }
-
-  Geometry _geometry;
-  volatile int const* _found;
-};
-
-template <typename Geometry>
-KOKKOS_INLINE_FUNCTION Geometry const &
-getGeometry(Intersects1<Geometry> const &pred)
-{
-  return pred._geometry;
-}
 struct MyCallback {
     MeshBlock *mb;
     double *xsearch;
     int *donorId;
     int *donorId_helper;
-    int *found;
 
     using tag = ArborX::Details::InlineCallbackTag;
     template <typename Query, typename Insert>
     KOKKOS_FUNCTION void operator()(Query const &query, int index,
                                     Insert const &insert) const {
         auto const &data = ArborX::getData(query);
+
         int i = data[0];
+        int *dId0 = donorId;
+        int *dId1 = donorId_helper;
 
-        if (found[i])
-            return;
-
+        if (donorId[i] > -1 && donorId_helper[i] == 0) return;
         int dId[2];
         mb->checkContainment(dId, index, xsearch + 3 * i);
         donorId[i] = dId[0];
         donorId_helper[i] = dId[1];
-        if (donorId[i] > -1 && donorId_helper[i] == 0)
-          found[i] = 1;
     }
 };
 
@@ -335,24 +304,17 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
 
 #ifdef TIOGA_USE_ARBORX
   int *donorId_helper = (int*)malloc(sizeof(int)*nsearch);
-  std::vector<int> found(nsearch, 0);
   for (int i = 0; i < nsearch; i++) {
       donorId[i] = -1;
       donorId_helper[i] = 0;
   }
 
-  using QueryType = Intersects1<ArborX::Point>;
+  using QueryType = ArborX::Intersects<ArborX::Point>;
   using PredicateType =
       ArborX::PredicateWithAttachment<QueryType, Kokkos::Array<int, 1>>;
 
   Kokkos::View<PredicateType *, DeviceType> queries_non_compact(
       Kokkos::ViewAllocateWithoutInitializing("queries"), nsearch);
-
-  /* We need to store the pointer, and use it inside the parallel region. The
-   * reason is the lambda is [=], so everything is getting copied, including
-   * the found array, so found.data() pointer inside is different from outside,
-   * and no sharing can be done. */
-  auto found_ptr = found.data();
 
   int n_queries;
   using ExecutionSpace = typename DeviceType::execution_space;
@@ -365,7 +327,7 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
                   queries_non_compact(update) =
                       ArborX::attach(QueryType(ArborX::Point{
                                          xsearch[3 * i], xsearch[3 * i + 1],
-                                         xsearch[3 * i + 2]}, found_ptr + i),
+                                         xsearch[3 * i + 2]}),
                                      Kokkos::Array<int, 1>{i});
               }
               ++update;
@@ -375,17 +337,17 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
   auto queries =
       Kokkos::subview(queries_non_compact, Kokkos::make_pair(0, n_queries));
 
+  // printf("#%d: n_queries = %d, n_search = %d\n", myid, n_queries, nsearch);
+
   Kokkos::View<int *, DeviceType> offset("offset", 0);
   Kokkos::View<int *, DeviceType> indices("indices", 0);
-  bvh.query(queries, MyCallback{this, xsearch, donorId, donorId_helper, found_ptr},
+  bvh.query(queries, MyCallback{this, xsearch, donorId, donorId_helper},
             indices, offset, ArborX::Experimental::TraversalPolicy().setPredicateSorting(false));
-
 
   for (i = 0; i < nsearch; i++) {
       if (i != xtag[i]) {
           donorId[i] = donorId[xtag[i]];
       }
-      // printf("#%d: ArborX -> (%d,%d)\n", myid, donorId[i], donorId_helper[i]);
 
       if (donorId[i] > -1) {
          donorCount++;
