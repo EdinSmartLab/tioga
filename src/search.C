@@ -57,9 +57,7 @@ struct MyCallback {
     template <typename Query, typename Insert>
     KOKKOS_FUNCTION void operator()(Query const &query, int index,
                                     Insert const &insert) const {
-        auto const &data = ArborX::getData(query);
-
-        int i = data[0];
+        int const i = ArborX::getData(query);
         int *dId0 = donorId;
         int *dId1 = donorId_helper;
 
@@ -310,8 +308,7 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
   }
 
   using QueryType = ArborX::Intersects<ArborX::Point>;
-  using PredicateType =
-      ArborX::PredicateWithAttachment<QueryType, Kokkos::Array<int, 1>>;
+  using PredicateType = ArborX::PredicateWithAttachment<QueryType, int>;
 
   Kokkos::View<PredicateType *, DeviceType> queries_non_compact(
       Kokkos::ViewAllocateWithoutInitializing("queries"), nsearch);
@@ -328,7 +325,7 @@ findOBB(xsearch,obq->xc,obq->dxc,obq->vec,nsearch);
                       ArborX::attach(QueryType(ArborX::Point{
                                          xsearch[3 * i], xsearch[3 * i + 1],
                                          xsearch[3 * i + 2]}),
-                                     Kokkos::Array<int, 1>{i});
+                                     i);
               }
               ++update;
           }
